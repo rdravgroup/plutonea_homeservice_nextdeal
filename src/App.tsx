@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowDown, ArrowLeft, ArrowRight, BadgeCheck, CalendarDays, Check, ChevronDown, Clock3, CreditCard, House, MapPin, Menu, MessageCircle, Minus, Palette, Plus, Search, ShieldCheck, ShoppingBag, ShoppingCart, Sparkles, Star, Store, Trash2, UserRound, X } from 'lucide-react'
 import { endpoints, googleSignInUrl, readSession, writeSession, type Address, type Booking, type Category, type City, type PartnerApplication, type PartnerListing, type Service, type ServiceSummary, type Sku } from './api'
@@ -40,7 +40,7 @@ export default function App() {
   return <ThemeProvider><LocationContext.Provider value={{ city, setCity, locationLabel, setLocationLabel }}><div className="app-shell"><Header /><main className="main-area"><Routes>
     <Route path="/" element={<HomePage />} /><Route path="/login" element={<AuthPage mode="login" />} /><Route path="/register" element={<AuthPage mode="register" />} />
     <Route path="/category/:categorySlug" element={<CategoryPage />} /><Route path="/service/:serviceSlug" element={<ServicePage />} />
-    <Route path="/classifieds" element={<MarketplacePage />} /><Route path="/chats" element={<MarketplaceChatsPage />} /><Route path="/chats/:id" element={<MarketplaceChatThreadPage />} />
+    <Route path="/marketplace" element={<MarketplacePage />} /><Route path="/classifieds" element={<MarketplacePage />} /><Route path="/chats" element={<MarketplaceChatsPage />} /><Route path="/chats/:id" element={<MarketplaceChatThreadPage />} />
     <Route path="/cars" element={<Navigate to="/classifieds" replace />} /><Route path="/buy-sell" element={<Navigate to="/classifieds" replace />} />
     <Route path="/marketplace/:adId" element={<MarketplaceDetailPage />} /><Route path="/sell" element={<PostMarketplaceAdPage />} /><Route path="/my-listings" element={<MyMarketplaceAdsPage />} />
     <Route path="/cart" element={<CartPage />} /><Route path="/checkout" element={<CheckoutPage />} /><Route path="/bookings" element={<BookingsPage />} />
@@ -197,6 +197,18 @@ function AddAddressModal({ city, onClose, onSaved }: { city: City | null; onClos
 
 function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const location = useLocation()
+  const [policy, setPolicy] = useState<'terms' | 'privacy' | null>(() => location.hash === '#terms' || location.hash === '#privacy' ? location.hash.slice(1) as 'terms' | 'privacy' : null)
+  const policyCloseRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!policy) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    policyCloseRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') closePolicy() }
+    window.addEventListener('keydown', onKeyDown)
+    return () => { document.body.style.overflow = previousOverflow; window.removeEventListener('keydown', onKeyDown) }
+  }, [policy])
+  const closePolicy = () => { setPolicy(null); window.history.replaceState(null, '', `${location.pathname}${location.search}`) }
   const oauthError = new URLSearchParams(location.search).get('oauth_error')
   const message = oauthError ? 'Google sign-in could not be completed. Please try again.' : ''
   const beginOAuth = () => {
@@ -204,7 +216,48 @@ function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     sessionStorage.removeItem('haven.post-oauth-path')
     window.location.assign(googleSignInUrl)
   }
-  return <div className="auth-page"><div className="auth-story"><Link to="/" className="brand brand-light"><span className="brand-mark">p</span><span>plutonea<span className="brand-dot">.</span></span></Link><span className="eyebrow">ONE ACCOUNT. TWO SECTIONS.</span><h1>Find help.<br />Find a good deal.</h1><p>Use one secure account across Home Services and Next Deal.</p><div className="auth-story-bottom"><span><ShieldCheck size={17} /> Secure Google sign-in</span><span><Star fill="currentColor" size={15} /> One profile across Plutonea</span></div></div><div className="auth-form-side"><div className="auth-box"><Link to="/" className="mobile-auth-brand"><span className="brand-mark">p</span> plutonea.</Link><span className="eyebrow">{mode === 'login' ? 'WELCOME TO PLUTONEA' : 'CREATE YOUR PLUTONEA ACCOUNT'}</span><h2>{mode === 'login' ? 'One account for it all.' : 'Get started securely.'}</h2><p className="auth-intro">Continue with Google. Your account can book services, post Next Deal ads and chat with buyers or sellers.</p>{message && <ErrorBanner message={message} />}<button className="button button-dark button-full" onClick={beginOAuth}><span className="google-g">G</span> Continue with Google <ArrowRight size={16} /></button><p className="auth-terms">By continuing, you agree to our <a href="#terms">Terms</a> and <a href="#privacy">Privacy Policy</a>.</p></div></div></div>
+  return <div className="auth-page">
+    <section className="auth-story" aria-labelledby="auth-story-title">
+      <Link to="/" className="brand brand-light"><span className="brand-mark">p</span><span>plutonea<span className="brand-dot">.</span></span></Link>
+      <span className="eyebrow">ONE ACCOUNT · TWO WAYS TO FIND MORE</span>
+      <h1 id="auth-story-title">Good help.<br />Great finds.</h1>
+      <p className="auth-story-intro">Plutonea brings trusted home services and local discoveries together in one simple account.</p>
+      <div className="auth-offerings">
+        <article className="auth-offering"><span className="auth-offering-icon"><House size={19} /></span><div><strong>Home Services</strong><p>Find and book help for the everyday jobs around your home.</p></div></article>
+        <article className="auth-offering"><span className="auth-offering-icon"><Store size={19} /></span><div><strong>Next Deal</strong><p>Discover local ads, post your own, and chat directly with people.</p></div></article>
+      </div>
+      <div className="auth-story-bottom"><span><ShieldCheck size={17} /> Secure Google sign-in</span><span><Star fill="currentColor" size={15} /> One profile across Plutonea</span></div>
+    </section>
+    <section className="auth-form-side" aria-label="Sign in and Plutonea information"><div className="auth-box">
+      <Link to="/" className="mobile-auth-brand"><span className="brand-mark">p</span> plutonea.</Link>
+      <span className="eyebrow">{mode === 'login' ? 'WELCOME TO PLUTONEA' : 'CREATE YOUR PLUTONEA ACCOUNT'}</span>
+      <h2>{mode === 'login' ? 'One account for it all.' : 'Get started securely.'}</h2>
+      <p className="auth-intro">Continue with Google to book services, post a Next Deal ad, or chat with a buyer or seller.</p>
+      {message && <ErrorBanner message={message} />}
+      <button className="button button-dark button-full" onClick={beginOAuth}><span className="google-g">G</span> Continue with Google <ArrowRight size={16} /></button>
+      <section className="auth-company-note"><span className="auth-company-label">ABOUT PLUTONEA</span><p>We connect people with useful home services and a place to discover or share local listings.</p></section>
+      <p className="auth-terms">By continuing, you agree to the <a href="#terms" onClick={() => setPolicy('terms')}>Terms</a> and acknowledge the <a href="#privacy" onClick={() => setPolicy('privacy')}>Privacy Policy</a>.</p>
+    </div></section>
+    {policy && <div className="modal-scrim auth-policy-scrim" role="presentation" onClick={event => { if (event.target === event.currentTarget) closePolicy() }}><section className="modal-card auth-policy-modal" role="dialog" aria-modal="true" aria-labelledby="auth-policy-title" aria-describedby="auth-policy-intro"><div className="modal-heading"><div><span className="eyebrow">PLUTONEA · {policy === 'terms' ? 'TERMS OF USE' : 'PRIVACY'}</span><h2 id="auth-policy-title">{policy === 'terms' ? 'Terms of Use' : 'Privacy Policy'}</h2></div><button ref={policyCloseRef} type="button" className="icon-button" onClick={closePolicy} aria-label="Close policy"><X /></button></div>
+      <div className="auth-policy-content" id="auth-policy-intro">{policy === 'terms' ? <>
+        <p className="auth-policy-lead">Plutonea brings Home Services and Next Deal together. These terms explain the basic rules for using both parts of the platform.</p>
+        <h3>1. Your account</h3><p>Sign in with your own Google account and keep your profile information accurate. You are responsible for activity carried out through your account. Do not impersonate another person or use the platform to break the law or harm others.</p>
+        <h3>2. Home Services</h3><p>Plutonea helps customers discover and book services offered by service partners. Review the service, price, schedule, address, and any displayed cancellation terms before confirming a booking. Partners are responsible for the services they provide; Plutonea may review partner applications and service listings before making them available.</p>
+        <h3>3. Next Deal listings and chats</h3><p>Users may post genuine, lawful ads and contact other users through chat. Provide accurate descriptions and images, and only post content you have the right to share. Buyers and sellers arrange item inspection, test drives, payment, and handover directly with each other. Plutonea does not collect payment for Next Deal transactions.</p>
+        <h3>4. Safety and moderation</h3><p>Do not post misleading, unlawful, abusive, or unsafe content. Plutonea may review, limit, or remove content or access when needed to protect users, enforce these terms, or comply with law.</p>
+        <h3>5. Platform availability</h3><p>We work to keep Plutonea available and useful, but some features may change or be temporarily unavailable for maintenance, security, or operational reasons.</p>
+      </> : <>
+        <p className="auth-policy-lead">This policy describes the information Plutonea uses to provide Home Services and Next Deal features.</p>
+        <h3>1. Information you provide</h3><p>When you sign in, Google shares basic account information such as your name, email address, and profile image. You may also provide a phone number, service address, booking details, ad text and images, and chat messages.</p>
+        <h3>2. How information is used</h3><p>We use this information to create and secure your account, show services and ads for your selected area, manage bookings, publish and moderate listings, enable chats, and provide support and platform safety.</p>
+        <h3>3. Who may receive information</h3><p>Information is shared as needed to provide a feature you use: a service partner receives relevant booking details; chat participants see messages exchanged in that conversation; and a payment provider processes Home Services payments when applicable. Next Deal payments are arranged directly between buyers and sellers and are not processed by Plutonea.</p>
+        <h3>4. Location and public content</h3><p>Your selected city and service address help with local discovery and bookings. Ads and images you submit may be visible to other users. Avoid including private or sensitive information in public listings.</p>
+        <h3>5. Retention and your choices</h3><p>We keep information for as long as needed to operate the platform, maintain account and transaction records, resolve disputes, and meet legal obligations. You can review or update available profile information in the app. Some records may need to be retained where required for legitimate operational or legal reasons.</p>
+        <h3>6. Security and questions</h3><p>We use safeguards designed to protect account and platform information. No online service can guarantee absolute security. For a privacy request or question, contact Plutonea using the support contact published for the service.</p>
+      </>}</div>
+      <p className="auth-policy-footnote">Plutonea may update these terms and notices as the service evolves. Check this page for the current version.</p>
+    </section></div>}
+  </div>
 }
 
 function RequireUser({ children, roles }: { children: ReactNode; roles?: string[] }) {
