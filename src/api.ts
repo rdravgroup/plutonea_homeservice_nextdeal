@@ -1,4 +1,4 @@
-const API_URL = (import.meta.env.VITE_API_URL || 'https://plutonea.com').replace(/\/$/, '')
+const API_URL = (import.meta.env.VITE_API_URL || 'https://plutonea-homeservice-nextdeal.runasp.net').replace(/\/$/, '')
 const SESSION_KEY = 'plutonea.session'
 const LEGACY_SESSION_KEY = 'haven.session'
 
