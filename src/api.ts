@@ -14,12 +14,15 @@ export type Session = {
 
 export type CurrentUser = {
   id: string; email: string; fullName: string; avatarUrl?: string | null
-  phone?: string | null; phoneVerified?: boolean; role: Role; profileStatus: string; cityId?: string | null; partnerApplicationStatus?: string | null; hasPartnerAccess?: boolean
+  phone?: string | null; emailVerified?: boolean; gender?: string | null; currentLocation?: string | null; profileComplete?: boolean; role: Role; profileStatus: string; cityId?: string | null; locationPermissionStatus?: string | null; locationPermissionUpdatedAtUtc?: string | null; partnerApplicationStatus?: string | null; hasPartnerAccess?: boolean
 }
 export type City = { id: string; name: string; slug: string; centerLat: number; centerLng: number }
+export type PlaceSearchResult = { displayName: string; lat: number; lng: number; city?: string | null; state?: string | null; postcode?: string | null }
 export type Category = { id: string; name: string; slug: string; iconUrl?: string | null; sortOrder: number }
+export type AdminCatalogCategory = Category & { cityId: string; cityName: string; citySlug: string; isActive: boolean }
 export type Sku = { id: string; name: string; price: number; strikePrice: number; discountPct: number; isInstant: boolean; inclusions: string }
 export type ServiceSummary = { id: string; name: string; slug: string; description: string; durationMins: number }
+export type AdminCatalogService = ServiceSummary & { categoryId: string; isActive: boolean }
 export type Service = ServiceSummary & { skus: Sku[] }
 export type CartLine = { id: string; skuId: string; skuName: string; unitPrice: number; discountPct: number; quantity: number; lineTotal: number }
 export type Cart = { id: string; cityId: string; items: CartLine[]; subtotal: number; discount: number; total: number; itemCount: number }
@@ -33,7 +36,7 @@ export type MarketplaceAd = {
   id: string; kind: 'Car' | 'Classified'; status: string; cityId: string; cityName: string; sellerUserId: string; sellerName: string
   title: string; description: string; price: number; locationText: string; images: string[]; make?: string | null; model?: string | null
   variant?: string | null; year?: number | null; kilometres?: number | null; fuel?: string | null; transmission?: string | null
-  reviewNote?: string | null; createdAt: string
+  reviewNote?: string | null; createdAt: string; categorySlug: string; subcategorySlug?: string | null; attributes: Record<string, string>
 }
 export type MarketplaceMessage = { id: string; senderUserId: string; senderName: string; body: string; createdAt: string }
 export type MarketplaceConversation = { id: string; adId: string; adTitle: string; adImage: string; adPrice: number; adStatus: string; otherUserId: string; otherUserName: string; lastMessage: string; lastMessageAt: string; unreadCount: number; isBuyer: boolean }
@@ -41,11 +44,12 @@ export type MarketplaceConversationThread = { conversation: MarketplaceConversat
 export type MarketplaceAdInput = {
   kind: 'Car' | 'Classified'; cityId: string; title: string; description: string; price: number; locationText: string; images: string[]
   make?: string; model?: string; variant?: string; year?: number; kilometres?: number; fuel?: string; transmission?: string
+  categorySlug?: string; subcategorySlug?: string | null; attributes?: Record<string, string>
 }
 export type PartnerApplication = {
   id: string; userId: string; status: string; submittedAt?: string | null; reviewedAt?: string | null
   reviewNote?: string | null; applicantName: string; applicantEmail: string
-  categoryIds: string; skills: string; documentUrls: string; applicantPhone?: string | null; phoneVerified?: boolean
+  categoryIds: string; skills: string; documentUrls: string; applicantPhone?: string | null; applicantRemarks?: string | null
 }
 export type Booking = { id: string; bookingNo: string; status: string; scheduledAt: string; total: number; items: { serviceName: string; quantity: number }[] }
 export type PageResult<T> = { items: T[]; page: number; pageSize: number; totalCount: number; totalPages: number }
@@ -65,7 +69,55 @@ export function writeSession(session: Session | null) {
   else localStorage.removeItem(SESSION_KEY)
   localStorage.removeItem(LEGACY_SESSION_KEY)
 }
+
+// OAuth redirects back to the SPA with its app tokens in the URL. Consume them
+// before React mounts so the first auth bootstrap always sees the new session.
+export function consumeOAuthCallback(): boolean {
+  const callback = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  const query = new URLSearchParams(window.location.search)
+  const accessToken = callback.get('accessToken') || query.get('accessToken')
+  const refreshToken = callback.get('refreshToken') || query.get('refreshToken')
+  if (!accessToken || !refreshToken) return false
+
+  writeSession({
+    accessToken,
+    refreshToken,
+    role: (callback.get('role') || query.get('role') || 'Customer') as Role,
+    profileStatus: callback.get('profileStatus') || query.get('profileStatus') || 'Incomplete',
+  })
+  sessionStorage.setItem('plutonea.oauth-cart-sync', 'pending')
+  sessionStorage.removeItem('haven.oauth-cart-sync')
+
+  // Never leave bearer/refresh tokens visible in the address bar or browser history.
+  query.delete('accessToken')
+  query.delete('refreshToken')
+  query.delete('role')
+  query.delete('profileStatus')
+  const cleanUrl = `${window.location.pathname}${query.size ? `?${query}` : ''}`
+  window.history.replaceState({}, document.title, cleanUrl)
+  return true
+}
+
+consumeOAuthCallback()
+
 export const googleSignInUrl = `${API_URL}/api/v1/auth/google-signin`
+
+function accessTokenRole(accessToken: string): Role | null {
+  try {
+    const part = accessToken.split('.')[1]
+    if (!part) return null
+    const base64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '='))
+    const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
+    const claims = JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>
+    const claim = claims.role || claims['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']
+    const roles = (Array.isArray(claim) ? claim : [claim]).map(String)
+    if (roles.includes('Admin') || roles.includes('2')) return 'Admin'
+    if (roles.includes('Professional') || roles.includes('1')) return 'Professional'
+    if (roles.includes('Customer') || roles.includes('0')) return 'Customer'
+    return null
+  } catch { return null }
+}
 
 let refreshTask: Promise<boolean> | null = null
 async function refreshSession(): Promise<boolean> {
@@ -95,7 +147,8 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     method: options.method || 'GET', headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   })
-  if (response.status === 401 && options.auth !== false && options.retry !== false && !path.startsWith('/api/v1/auth/')) {
+  const canRefreshForRequest = path !== '/api/v1/auth/refresh' && path !== '/api/v1/auth/logout'
+  if (response.status === 401 && options.auth !== false && options.retry !== false && canRefreshForRequest) {
     if (await refreshSession()) return api<T>(path, { ...options, retry: false })
   }
   if (response.status === 204) return undefined as T
@@ -107,16 +160,39 @@ export async function api<T>(path: string, options: { method?: string; body?: un
 }
 
 export const endpoints = {
-  me: () => api<CurrentUser>('/api/v1/auth/me'),
+  me: async () => {
+    const profile = await api<CurrentUser>('/api/v1/auth/me')
+    const session = readSession()
+    // Partner approval changes the database role. A browser may still have a
+    // customer token from before approval; renew it before partner-only APIs run.
+    if (session && accessTokenRole(session.accessToken) !== profile.role && await refreshSession())
+      return api<CurrentUser>('/api/v1/auth/me', { retry: false })
+    return profile
+  },
   cities: () => api<City[]>('/api/v1/cities', { auth: false }),
+  searchPlaces: (query: string) => api<PlaceSearchResult[]>(`/api/v1/locations/search?q=${encodeURIComponent(query)}`, { auth: false }),
   categories: (city: string) => api<Category[]>(`/api/v1/cities/${encodeURIComponent(city)}/categories`, { auth: false }),
   services: (category: string) => api<ServiceSummary[]>(`/api/v1/categories/${encodeURIComponent(category)}/services`, { auth: false }),
+  adminCatalogCategories: (cityId: string) => api<AdminCatalogCategory[]>(`/api/v1/admin/cities/${cityId}/categories`),
+  adminCatalogServices: (categoryId: string) => api<AdminCatalogService[]>(`/api/v1/admin/categories/${categoryId}/services`),
+  createCatalogCategory: (value: { cityId: string; name: string; slug: string; iconUrl?: string | null; sortOrder: number }) => api<string>('/api/v1/admin/categories', { method: 'POST', body: value }),
+  updateCatalogCategory: (id: string, value: { name: string; slug: string; iconUrl?: string | null; sortOrder: number; isActive: boolean }) => api<void>(`/api/v1/admin/categories/${id}`, { method: 'PUT', body: value }),
+  deleteCatalogCategory: (id: string) => api<void>(`/api/v1/admin/categories/${id}`, { method: 'DELETE' }),
+  createCatalogService: (value: { categoryId: string; name: string; slug: string; description: string; durationMins: number }) => api<string>('/api/v1/admin/services', { method: 'POST', body: value }),
+  updateCatalogService: (id: string, value: { categoryId: string; name: string; slug: string; description: string; durationMins: number; isActive: boolean }) => api<void>(`/api/v1/admin/services/${id}`, { method: 'PUT', body: value }),
+  deleteCatalogService: (id: string) => api<void>(`/api/v1/admin/services/${id}`, { method: 'DELETE' }),
   service: (slug: string) => api<Service>(`/api/v1/services/${encodeURIComponent(slug)}`, { auth: false }),
   publicListings: (categoryId?: string) => api<PartnerListing[]>(`/api/v1/listings${categoryId ? `?categoryId=${categoryId}` : ''}`, { auth: false }),
-  marketplaceAds: (cityId?: string, search?: string, kind?: 'Car' | 'Classified') => api<MarketplaceAd[]>(`/api/v1/marketplace/ads?${new URLSearchParams({ ...(cityId ? { cityId } : {}), ...(search ? { search } : {}), ...(kind ? { kind } : {}) })}`, { auth: false }),
-  marketplaceAd: (id: string) => api<MarketplaceAd>(`/api/v1/marketplace/ads/${id}`, { auth: false }),
+  marketplaceAds: (cityId?: string, search?: string, kind?: 'Car' | 'Classified', categorySlug?: string, subcategorySlug?: string) => api<MarketplaceAd[]>(`/api/v1/marketplace/ads?${new URLSearchParams({ ...(cityId ? { cityId } : {}), ...(search ? { search } : {}), ...(kind ? { kind } : {}), ...(categorySlug ? { categorySlug } : {}), ...(subcategorySlug ? { subcategorySlug } : {}) })}`, { auth: false }),
+  // Include the signed-in user's token so owners can preview their pending or
+  // rejected ads; the API still exposes those statuses only to authorized users.
+  marketplaceAd: (id: string) => api<MarketplaceAd>(`/api/v1/marketplace/ads/${id}`),
+  marketplaceFavorites: () => api<MarketplaceAd[]>('/api/v1/marketplace/favorites'),
+  addMarketplaceFavorite: (id: string) => api<void>(`/api/v1/marketplace/ads/${id}/favorite`, { method: 'PUT' }),
+  removeMarketplaceFavorite: (id: string) => api<void>(`/api/v1/marketplace/ads/${id}/favorite`, { method: 'DELETE' }),
   myMarketplaceAds: () => api<MarketplaceAd[]>('/api/v1/marketplace/my-ads'),
   createMarketplaceAd: (ad: MarketplaceAdInput) => api<MarketplaceAd>('/api/v1/marketplace/ads', { method: 'POST', body: ad }),
+  updateMarketplaceAd: (id: string, ad: MarketplaceAdInput) => api<MarketplaceAd>(`/api/v1/marketplace/ads/${id}`, { method: 'PUT', body: ad }),
   setMarketplaceAdStatus: (id: string, status: string) => api<void>(`/api/v1/marketplace/ads/${id}/status`, { method: 'POST', body: { status } }),
   startMarketplaceConversation: (id: string, message: string) => api<MarketplaceConversation>(`/api/v1/marketplace/ads/${id}/conversations`, { method: 'POST', body: { message } }),
   marketplaceConversations: () => api<MarketplaceConversation[]>('/api/v1/marketplace/conversations'),
@@ -127,6 +203,7 @@ export const endpoints = {
   respondToTestDrive: (id: string, status: 'Accepted' | 'Declined') => api<void>(`/api/v1/marketplace/seller/test-drives/${id}/status`, { method: 'POST', body: { status } }),
   myTestDrives: () => api<MarketplaceRequest[]>('/api/v1/marketplace/my-test-drives'),
   adminMarketplaceAds: (status?: string) => api<MarketplaceAd[]>(`/api/v1/admin/marketplace/ads?${new URLSearchParams({ ...(status ? { status } : {}) })}`),
+  adminUpdateMarketplaceAd: (id: string, ad: MarketplaceAdInput) => api<MarketplaceAd>(`/api/v1/admin/marketplace/ads/${id}`, { method: 'PUT', body: ad }),
   reviewMarketplaceAd: (id: string, approve: boolean, note?: string) => api<MarketplaceAd>(`/api/v1/admin/marketplace/ads/${id}/review`, { method: 'POST', body: { approve, note } }),
   cart: () => api<Cart>('/api/v1/cart'),
   addCartItem: (skuId: string, quantity: number) => api<Cart>('/api/v1/cart/items', { method: 'POST', body: { skuId, quantity } }),
@@ -137,11 +214,12 @@ export const endpoints = {
   addAddress: (address: Omit<Address, 'id' | 'isDefault'> & { isDefault?: boolean }) => api<Address>('/api/v1/addresses', { method: 'POST', body: address }),
   deleteAddress: (id: string) => api<void>(`/api/v1/addresses/${id}`, { method: 'DELETE' }),
   setDefaultAddress: (id: string) => api<void>(`/api/v1/addresses/${id}/default`, { method: 'PUT' }),
-  updateProfile: (fullName: string, phone?: string) => api<void>('/api/v1/profile', { method: 'PUT', body: { fullName, ...(phone !== undefined ? { phone } : {}) } }),
-  requestPhoneOtp: (phone: string) => api<{devCode?:string|null}>('/api/v1/profile/phone/request-otp', { method: 'POST', body: { phone } }),
-  verifyPhoneOtp: (code: string) => api<{profileComplete:boolean;accessToken?:string|null;refreshToken?:string|null;role?:Role|null;profileStatus:string}>('/api/v1/profile/phone/verify-otp', { method: 'POST', body: { code } }),
+  updateProfile: (profile: { fullName: string; cityId?: string | null; phone: string; gender: string; currentLocation: string }) => api<void>('/api/v1/profile', { method: 'PUT', body: profile }),
+  updateLocationPreference: (permissionStatus: 'Granted' | 'Denied' | 'Dismissed' | 'Manual', cityId?: string | null, clearCity = false) => api<{ permissionStatus: string; cityId?: string | null; updatedAtUtc: string }>('/api/v1/profile/location-preference', { method: 'PUT', body: { permissionStatus, cityId: cityId || null, clearCity } }),
+  profileCompletion: () => api<{emailVerified:boolean;profileComplete:boolean;hasAddress:boolean;profileStatus:string;phone?:string|null;gender?:string|null;currentLocation?:string|null;missingFields:string[]}>('/api/v1/profile/completion'),
   myApplication: () => api<PartnerApplication | null>('/api/v1/pro/applications/me'),
-  submitPartnerApplication: (categoryIds: string[], serviceId: string) => api<string>('/api/v1/pro/applications', { method: 'POST', body: { categoryIds, skills: [{ serviceId, experienceYears: 1 }], documentUrls: ['pending-document-review'] } }),
+  submitPartnerApplication: (categoryIds: string[], serviceId: string, serviceDescription?: string, applicantRemarks?: string) => api<string>('/api/v1/pro/applications', { method: 'POST', body: { categoryIds, skills: [{ serviceId, experienceYears: 1, serviceDescription }], documentUrls: [], applicantRemarks } }),
+  updatePartnerApplication: (id: string, categoryIds: string[], serviceId: string, serviceDescription?: string, applicantRemarks?: string) => api<void>(`/api/v1/pro/applications/${id}`, { method: 'PUT', body: { categoryIds, skills: [{ serviceId, experienceYears: 1, serviceDescription }], applicantRemarks } }),
   myListings: () => api<PartnerListing[]>('/api/v1/partner/listings'),
   createListing: (listing: Omit<PartnerListing, 'id' | 'partnerUserId' | 'partnerName' | 'partnerEmail' | 'categoryName' | 'status' | 'reviewNote' | 'createdAt' | 'serviceSlug' | 'skuId'>) =>
     api<PartnerListing>('/api/v1/partner/listings', { method: 'POST', body: listing }),
@@ -151,7 +229,7 @@ export const endpoints = {
   adminListings: (status?: string) => api<PartnerListing[]>(`/api/v1/admin/listings${status ? `?status=${status}` : ''}`),
   reviewListing: (id: string, approve: boolean, note?: string) => api<PartnerListing>(`/api/v1/admin/listings/${id}/review`, { method: 'POST', body: { approve, note } }),
   adminApplications: (status?: string) => api<PartnerApplication[]>(`/api/v1/admin/pro-applications${status ? `?status=${status}` : ''}`),
-  approveApplication: (id: string) => api<void>(`/api/v1/admin/pro-applications/${id}/approve`, { method: 'POST', body: {} }),
+  approveApplication: (id: string, suggestion?: string) => api<void>(`/api/v1/admin/pro-applications/${id}/approve`, { method: 'POST', body: { suggestion: suggestion?.trim() || null } }),
   rejectApplication: (id: string, reason: string) => api<void>(`/api/v1/admin/pro-applications/${id}/reject`, { method: 'POST', body: { reason } }),
   bookings: () => api<PageResult<Booking>>('/api/v1/bookings?page=1&pageSize=50'),
   adminBookings: () => api<PageResult<Booking>>('/api/v1/admin/bookings?page=1&pageSize=50'),
@@ -169,3 +247,7 @@ export const endpoints = {
   },
 }
 export type MarketplaceRequest = { id: string; adId: string; adTitle: string; buyerUserId: string; buyerName: string; buyerEmail: string; message: string; status: string; requestedAt?: string | null; createdAt: string }
+
+
+
+

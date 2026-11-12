@@ -26,9 +26,16 @@ Open the Vite URL shown in the terminal (normally `http://localhost:5173`).
 - Guest home-service cart items are kept locally and synchronized after OAuth sign-in. Signed-in cart and bookings use the API.
 - The API's development mock payment can complete checkout. Live Razorpay order creation and verification endpoints exist, but the browser checkout handoff is not enabled in this frontend yet.
 
+## Profile completion
+
+After signing in with a verified email account, complete **Full name**, **Mobile number**, **Gender**, and **Current location / area** in My profile. The mobile number is collected for listing contact only; Plutonea does not send SMS or WhatsApp verification codes. Posting ads, messaging sellers, booking services, and partner actions remain locked until the profile is complete. The profile endpoint validates all required fields on the server.
+
+The API EF migration `20261112085547_RequireProfileDetails` adds the nullable `Gender` and `CurrentLocation` columns for existing users. To update an existing database manually, run `D:\Applications\DIVIAIX_CHS\PlutoneaAPI\sql\ProfileCompletionRequirements.sql` once; it also records the migration so startup will not apply it twice. Legacy verification tables are retained for historical compatibility but no longer participate in sign-in or access checks.
 ## Build
 
 ```bash
 npm run build
 ```
+
+
 
