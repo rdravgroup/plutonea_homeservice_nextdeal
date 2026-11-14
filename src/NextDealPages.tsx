@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type MouseEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Bell, CalendarDays, ChevronDown, Heart, MapPin, MessageCircle, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { endpoints, type MarketplaceAd, type MarketplaceAdInput } from './api'
@@ -234,7 +234,89 @@ function fieldValue(ad: MarketplaceAd, key: string): string {
 
 function FieldControl({ field, value, onChange }: { field: DealField; value: string; onChange: (value: string) => void }) {
   if (field.type === 'select') return <label className="nextdeal-field">{field.label}<select value={value} onChange={event => onChange(event.target.value)}><option value="">Any</option>{field.options?.map(option => <option key={option}>{option}</option>)}</select></label>
-  return <label className="nextdeal-field">{field.label}<input type={field.type === 'number' ? 'number' : 'search'} value={value} onChange={event => onChange(event.target.value)} placeholder={field.placeholder || `Any ${field.label.toLowerCase()}`} /></label>
+  if (field.type === 'number') {
+    const [minimum = '', maximum = ''] = value.split('|')
+    return <fieldset className="nextdeal-field-range"><legend>{field.label}</legend><label><span>Min</span><input type="number" min="0" value={minimum} onChange={event => onChange(`${event.target.value}|${maximum}`)} placeholder="Any" /></label><label><span>Max</span><input type="number" min="0" value={maximum} onChange={event => onChange(`${minimum}|${event.target.value}`)} placeholder="Any" /></label></fieldset>
+  }
+  return <label className="nextdeal-field">{field.label}<input type="search" value={value} onChange={event => onChange(event.target.value)} placeholder={field.placeholder || `Any ${field.label.toLowerCase()}`} /></label>
+}
+
+const selectedValues = (value: string) => { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed as string[] : [] } catch { return [] } }
+const saveSelectedValues = (values: string[]) => JSON.stringify(values)
+
+function DualRange({ label, low, high, floor, ceiling, prefix = '', suffix = '', onChange }: {
+  label: string; low: string; high: string; floor: number; ceiling: number; prefix?: string; suffix?: string
+  onChange: (low: string, high: string) => void
+}) {
+  const safeCeiling = Math.max(floor + 1, ceiling)
+  const currentLow = low ? Math.max(floor, Math.min(safeCeiling, Number(low))) : floor
+  const currentHigh = high ? Math.max(floor, Math.min(safeCeiling, Number(high))) : safeCeiling
+  const updateLow = (raw: string) => onChange(raw, high && Number(raw) > Number(high) ? raw : high)
+  const updateHigh = (raw: string) => onChange(low && Number(raw) < Number(low) ? raw : low, raw)
+  return <div className="nextdeal-dual-range"><div className="nextdeal-range-values"><strong>{low ? `${prefix}${Number(low).toLocaleString('en-IN')}${suffix}` : `${prefix}${floor.toLocaleString('en-IN')}${suffix}`}</strong><strong>{high ? `${prefix}${Number(high).toLocaleString('en-IN')}${suffix}` : `${prefix}${safeCeiling.toLocaleString('en-IN')}${suffix}`}</strong></div>
+    <div className="nextdeal-range-sliders"><input aria-label={`${label} minimum slider`} type="range" min={floor} max={safeCeiling} value={currentLow} onChange={event => updateLow(event.target.value)} /><input aria-label={`${label} maximum slider`} type="range" min={floor} max={safeCeiling} value={currentHigh} onChange={event => updateHigh(event.target.value)} /></div>
+    <div className="nextdeal-range-inputs"><label><span>Minimum</span><input aria-label={`${label} minimum`} type="number" min={floor} max={safeCeiling} value={low} placeholder="Any" onChange={event => updateLow(event.target.value)} /></label><label><span>Maximum</span><input aria-label={`${label} maximum`} type="number" min={floor} max={safeCeiling} value={high} placeholder="Any" onChange={event => updateHigh(event.target.value)} /></label></div>
+  </div>
+}
+
+function FilterGroup({ title, children, initiallyOpen = false }: { title: string; children: ReactNode; initiallyOpen?: boolean }) {
+  return <details className="nextdeal-filter-group" open={initiallyOpen}><summary>{title}<ChevronDown size={17} /></summary><div className="nextdeal-filter-group-body">{children}</div></details>
+}
+
+function CarFilterPanel({ ads, filters, setFilter, minPrice, maxPrice, setPriceRange }: { ads: MarketplaceAd[]; filters: Record<string, string>; setFilter: (key: string, value: string) => void; minPrice: string; maxPrice: string; setPriceRange: (low: string, high: string) => void }) {
+  const [makeSearch, setMakeSearch] = useState('')
+  const [rtoSearch, setRtoSearch] = useState('')
+  const makes = useMemo(() => [...new Set(ads.map(ad => ad.make?.trim()).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b)), [ads])
+  const selectedMakes = selectedValues(filters.make || '')
+  const selectedModels = selectedValues(filters.model || '')
+  const makeCounts = (make: string) => ads.filter(ad => ad.make?.toLowerCase() === make.toLowerCase()).length
+  const visibleMakes = makes.filter(make => make.toLowerCase().includes(makeSearch.toLowerCase()) || ads.some(ad => ad.make?.toLowerCase() === make.toLowerCase() && ad.model?.toLowerCase().includes(makeSearch.toLowerCase())))
+  const modelAds = ads.filter(ad => !selectedMakes.length || selectedMakes.some(make => make.toLowerCase() === (ad.make || '').toLowerCase()))
+  const models = [...new Set(modelAds.map(ad => ad.model?.trim()).filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b))
+  const toggle = (key: string, value: string) => {
+    const current = selectedValues(filters[key] || '')
+    setFilter(key, saveSelectedValues(current.includes(value) ? current.filter(item => item !== value) : [...current, value]))
+  }
+  const minCarPrice = Math.min(...ads.map(ad => ad.price), 0)
+  const maxCarPrice = Math.max(...ads.map(ad => ad.price), 20000000)
+  const years = ads.map(ad => ad.year).filter((value): value is number => Boolean(value))
+  const kms = ads.map(ad => ad.kilometres).filter((value): value is number => value != null)
+  const rtos = [...new Set(ads.map(ad => ad.attributes?.rtoState).filter((value): value is string => Boolean(value)))].sort()
+  const setRange = (key: string, minimum: string, maximum: string) => setFilter(key, `${minimum}|${maximum}`)
+  const budgetLow = minPrice
+  const budgetHigh = maxPrice
+  const [yearLow = '', yearHigh = ''] = (filters.year || '|').split('|')
+  const [kmLow = '', kmHigh = ''] = (filters.kilometres || '|').split('|')
+  const checkOptions = (key: string, options: string[], countFor: (option: string) => number, title: string) => <FilterGroup title={title}>
+    <div className="nextdeal-check-options">{options.map(option => <label className="nextdeal-filter-check" key={option}><input type="checkbox" checked={selectedValues(filters[key] || '').includes(option)} onChange={() => toggle(key, option)} /><span>{option}</span><small>{countFor(option)}</small></label>)}</div>
+  </FilterGroup>
+  return <div className="nextdeal-car-filters">
+    <FilterGroup title="Budget" initiallyOpen>
+      <DualRange label="Budget" low={budgetLow} high={budgetHigh} floor={Math.max(0, minCarPrice)} ceiling={Math.max(maxCarPrice, Math.max(0, minCarPrice) + 1)} prefix="₹" onChange={setPriceRange} />
+    </FilterGroup>
+    <FilterGroup title="Make & Model" initiallyOpen>
+      <label className="nextdeal-filter-search"><Search size={16} /><input type="search" value={makeSearch} onChange={event => setMakeSearch(event.target.value)} placeholder="Search a brand or model" /></label>
+      {ads.length > 0 && <><small className="nextdeal-filter-hint">Popular models</small><div className="nextdeal-model-chips">{[...new Set(ads.map(ad => ad.model).filter((value): value is string => Boolean(value)))].filter(model => !makeSearch || model.toLowerCase().includes(makeSearch.toLowerCase())).slice(0, 6).map(model => <button type="button" className={selectedModels.includes(model) ? 'selected' : ''} key={model} onClick={() => toggle('model', model)}>{model}</button>)}</div></>}
+      <div className="nextdeal-make-list">{visibleMakes.map(make => {
+        const expanded = selectedMakes.includes(make) || make.toLowerCase().includes(makeSearch.toLowerCase()) && makeSearch.length > 0
+        const makeModels = [...new Set(ads.filter(ad => ad.make?.toLowerCase() === make.toLowerCase()).map(ad => ad.model).filter((value): value is string => Boolean(value)))].sort()
+        return <details key={make} className="nextdeal-make-item" open={expanded}><summary><label onClick={event => event.stopPropagation()}><input type="checkbox" checked={selectedMakes.includes(make)} onChange={() => toggle('make', make)} /><span>{make}</span><small>({makeCounts(make)})</small></label><ChevronDown size={15} /></summary><div>{makeModels.map(model => <label className="nextdeal-filter-check nextdeal-model-option" key={model}><input type="checkbox" checked={selectedModels.includes(model)} onChange={() => toggle('model', model)} /><span>{model}</span><small>({ads.filter(ad => ad.make?.toLowerCase() === make.toLowerCase() && ad.model === model).length})</small></label>)}</div></details>
+      })}{!visibleMakes.length && <p className="muted">No matching make in current listings.</p>}</div>
+      {models.length > 0 && <div className="nextdeal-selected-model-hint">Choose a make to narrow its models, or search above.</div>}
+    </FilterGroup>
+    <FilterGroup title="Seller Type"><div className="nextdeal-radio-options">{[['Individual seller', 'Individual'], ['Dealer', 'Dealer']].map(([label, value]) => <label className="nextdeal-filter-check" key={value}><input type="radio" name="sellerType" checked={(filters.sellerType || '') === value} onChange={() => setFilter('sellerType', value)} /><span>{label}</span><small>({ads.filter(ad => ad.attributes?.sellerType === value).length})</small></label>)}<button type="button" className="nextdeal-filter-reset-inline" onClick={() => setFilter('sellerType', '')}>Any seller</button></div></FilterGroup>
+    <FilterGroup title="Model Year"><DualRange label="Model year" low={yearLow} high={yearHigh} floor={years.length ? Math.min(...years) : 2000} ceiling={years.length ? Math.max(...years) : new Date().getFullYear()} onChange={(low, high) => setRange('year', low, high)} /></FilterGroup>
+    <FilterGroup title="Kms Driven"><DualRange label="Kilometres driven" low={kmLow} high={kmHigh} floor={0} ceiling={Math.max(100000, ...kms)} suffix=" km" onChange={(low, high) => setRange('kilometres', low, high)} /></FilterGroup>
+    {checkOptions('fuel', ['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'], option => ads.filter(ad => ad.fuel?.toLowerCase() === option.toLowerCase()).length, 'Fuel')}
+    {checkOptions('bodyType', ['SUV', 'Hatchback', 'Sedan', 'MUV', 'Coupe', 'Pickup', 'Van'], option => ads.filter(ad => ad.attributes?.bodyType?.toLowerCase() === option.toLowerCase()).length, 'Body Type')}
+    {checkOptions('transmission', ['Manual', 'Automatic'], option => ads.filter(ad => ad.transmission?.toLowerCase() === option.toLowerCase()).length, 'Transmission')}
+    <FilterGroup title="Color"><div className="nextdeal-tile-options">{['White', 'Silver', 'Black', 'Grey', 'Red', 'Blue', 'Brown', 'Green', 'Other'].map(color => <button type="button" key={color} className={selectedValues(filters.color || '').includes(color) ? 'selected' : ''} onClick={() => toggle('color', color)}><i style={{ background: color.toLowerCase() }} /><strong>{color}</strong><small>{ads.filter(ad => ad.attributes?.color?.toLowerCase() === color.toLowerCase()).length}</small></button>)}</div></FilterGroup>
+    {checkOptions('features', ['Infotainment System', 'Rear AC', 'Sunroof', 'Leather Upholstery', 'Alloy Wheels', 'ABS', 'EBD', 'Traction Control', 'Reverse Camera', 'Airbags'], option => ads.filter(ad => (ad.attributes?.features || '').toLowerCase().includes(option.toLowerCase())).length, 'Features')}
+    {checkOptions('seats', ['4', '5', '6', '7', '8', '9+'], option => ads.filter(ad => ad.attributes?.seats === option).length, 'Seats')}
+    {checkOptions('owners', ['First owner', 'Second owner', 'Third owner', 'Fourth owner', 'More than four'], option => ads.filter(ad => ad.attributes?.owners === option).length, 'Owners')}
+    <FilterGroup title="RTO"><label className="nextdeal-filter-search"><Search size={16} /><input type="search" value={rtoSearch} onChange={event => setRtoSearch(event.target.value)} placeholder="Search for a RTO / state" /></label><div className="nextdeal-check-options">{rtos.filter(rto => rto.toLowerCase().includes(rtoSearch.toLowerCase())).map(rto => <label className="nextdeal-filter-check" key={rto}><input type="checkbox" checked={selectedValues(filters.rtoState || '').includes(rto)} onChange={() => toggle('rtoState', rto)} /><span>{rto}</span><small>({ads.filter(ad => ad.attributes?.rtoState === rto).length})</small></label>)}</div><small className="nextdeal-filter-hint">RTO values appear as sellers add them to listings.</small></FilterGroup>
+    <FilterGroup title="Safety"><div className="nextdeal-safety-filter"><strong>NCAP Ratings</strong><div className="nextdeal-rating-options">{['5 star', '4 star', '3 star', '2 star', '1 star', 'Not rated'].map(rating => <button type="button" className={selectedValues(filters.ncapRating || '').includes(rating) ? 'selected' : ''} key={rating} onClick={() => toggle('ncapRating', rating)}>{rating === 'Not rated' ? rating : `${rating} ★`} <small>({ads.filter(ad => ad.attributes?.ncapRating === rating).length})</small></button>)}</div><strong>Airbags</strong><div className="nextdeal-rating-options">{['1', '2', '3', '4', '5', '6', '7', '8+'].map(value => <button type="button" className={selectedValues(filters.airbags || '').includes(value) ? 'selected' : ''} key={value} onClick={() => toggle('airbags', value)}>{value} {value === '1' ? 'Airbag' : 'Airbags'} <small>({ads.filter(ad => ad.attributes?.airbags === value).length})</small></button>)}</div><strong>Safety Features</strong><div className="nextdeal-check-options">{['ABS', 'EBD', 'Traction Control', 'Airbags'].map(option => <label className="nextdeal-filter-check" key={option}><input type="checkbox" checked={selectedValues(filters.features || '').includes(option)} onChange={() => toggle('features', option)} /><span>{option}</span><small>{ads.filter(ad => (ad.attributes?.features || '').toLowerCase().includes(option.toLowerCase())).length}</small></label>)}</div></div></FilterGroup>
+  </div>
 }
 
 export function MarketplacePage() {
@@ -253,16 +335,31 @@ export function MarketplacePage() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [categoriesOpen, setCategoriesOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadProgress, setLoadProgress] = useState(4)
   const [error, setError] = useState('')
 
   useEffect(() => {
     let active = true
-    setLoading(true); setError('')
+    const startedAt = performance.now()
+    let progressTimer: ReturnType<typeof setInterval> | undefined
+    let finishTimer: ReturnType<typeof setTimeout> | undefined
+    setLoading(true); setLoadProgress(4); setError('')
+    progressTimer = setInterval(() => setLoadProgress(current => Math.min(91, current + (current < 60 ? 3 : 1))), 95)
     endpoints.marketplaceAds(undefined, appliedSearch || undefined, category?.slug === 'cars' ? 'Car' : undefined, category?.slug, subcategorySlug || undefined)
       .then(rows => active && setAds(rows))
       .catch(reason => active && setError((reason as Error).message))
-      .finally(() => active && setLoading(false))
-    return () => { active = false }
+      .finally(() => {
+        const finishLoading = () => {
+          if (!active) return
+          setLoadProgress(100)
+          finishTimer = setTimeout(() => { if (active) setLoading(false) }, 160)
+        }
+        // Avoid a one-frame flash on very fast responses without delaying real data.
+        const minimumVisibleMs = 350
+        const remaining = Math.max(0, minimumVisibleMs - (performance.now() - startedAt))
+        finishTimer = setTimeout(finishLoading, remaining)
+      })
+    return () => { active = false; if (progressTimer) clearInterval(progressTimer); if (finishTimer) clearTimeout(finishTimer) }
   }, [appliedSearch, category?.slug, subcategorySlug])
 
   useEffect(() => { setFieldFilters({}); setMinPrice(''); setMaxPrice('') }, [category?.slug, subcategorySlug])
@@ -270,22 +367,28 @@ export function MarketplacePage() {
   const visible = useMemo(() => ads.filter(ad => {
     if (minPrice && ad.price < Number(minPrice)) return false
     if (maxPrice && ad.price > Number(maxPrice)) return false
+    if (!category && fieldFilters.condition && ad.attributes?.condition !== fieldFilters.condition) return false
     for (const field of activeFields) {
       const expected = fieldFilters[field.key]?.trim()
       if (!expected) continue
       const actual = fieldValue(ad, field.key)
       if (field.type === 'number') {
-        const amount = Number(actual); const wanted = Number(expected)
+        const amount = Number(actual); const [minimum, maximum] = expected.split('|')
         if (!Number.isFinite(amount)) return false
-        if (field.key === 'kilometres' || field.key === 'bathrooms') { if (amount > wanted) return false }
-        else if (amount < wanted) return false
+        if (minimum && amount < Number(minimum)) return false
+        if (maximum && amount > Number(maximum)) return false
+      } else if (selectedValues(expected).length) {
+        const choices = selectedValues(expected)
+        if (field.key === 'features') {
+          if (!choices.some(choice => actual.toLowerCase().includes(choice.toLowerCase()))) return false
+        } else if (!choices.some(choice => actual.toLowerCase() === choice.toLowerCase())) return false
       } else if (field.type === 'select') {
         if (actual.toLowerCase() !== expected.toLowerCase()) return false
       } else if (!actual.toLowerCase().includes(expected.toLowerCase())) return false
     }
     return true
   }).sort((a, b) => sort === 'price-low' ? a.price - b.price : sort === 'price-high' ? b.price - a.price : sort === 'oldest' ? Date.parse(a.createdAt) - Date.parse(b.createdAt) : Date.parse(b.createdAt) - Date.parse(a.createdAt)), [ads, activeFields, fieldFilters, minPrice, maxPrice, sort])
-  const activeCount = Object.values(fieldFilters).filter(Boolean).length + Number(Boolean(minPrice)) + Number(Boolean(maxPrice))
+  const activeCount = Object.values(fieldFilters).reduce((count, value) => count + (selectedValues(value).length || value.split('|').filter(Boolean).length || Number(Boolean(value))), 0) + Number(Boolean(minPrice)) + Number(Boolean(maxPrice))
   const clearFilters = () => { setMinPrice(''); setMaxPrice(''); setFieldFilters({}); setSort('newest') }
   const setCategory = (slug?: string) => { setCategoriesOpen(false); navigate(slug ? `/classifieds/${slug}` : '/classifieds') }
   const submitSearch = (event: FormEvent) => { event.preventDefault(); setAppliedSearch(search.trim()) }
@@ -299,16 +402,20 @@ export function MarketplacePage() {
     <div className="nextdeal-results-layout">
       <main className="nextdeal-results-main">
         <div className="nextdeal-sort-row"><span>{appliedSearch ? `Results for “${appliedSearch}”` : category ? `Browse ${category.label}` : 'Recent ads from across India'}</span><label>Sort<select value={sort} onChange={event => setSort(event.target.value)}><option value="newest">Newest</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="oldest">Oldest</option></select></label></div>
+        {loading && <div className="nextdeal-load-progress" role="progressbar" aria-label="Loading listings and photos" aria-valuemin={0} aria-valuemax={100} aria-valuenow={loadProgress}><div className="nextdeal-load-progress-copy"><span>Loading listings and photos</span><strong>{loadProgress}%</strong></div><div className="nextdeal-load-progress-track"><span style={{ width: `${loadProgress}%` }} /></div></div>}
         {error && <div className="error-banner" role="alert">{error}</div>}
-        {loading ? <div className="marketplace-grid">{Array.from({ length: 6 }, (_, index) => <div className="skeleton nextdeal-card-skeleton" key={index} />)}</div> : visible.length ? <div className="marketplace-grid nextdeal-listing-grid">{visible.map(ad => <DealCard ad={ad} key={ad.id} />)}</div> : <div className="empty-state"><span className="nextdeal-empty-icon">{category?.icon || '🔎'}</span><h3>No matching ads yet</h3><p>Try another search or clear a filter. You can also post the first ad in this category.</p><button className="button button-outline" onClick={clearFilters}>Clear filters</button> <Link className="button button-dark" to={`/sell${category ? `?category=${category.slug}` : ''}`}>Post an ad</Link></div>}
+        {loading ? <div className="marketplace-grid nextdeal-loading-grid" aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <article className="nextdeal-loading-card" key={index}><div className="nextdeal-loading-photo"><span className="nextdeal-loading-image-progress"><i style={{ animationDelay: `${index * 110}ms` }} /></span></div><div className="nextdeal-loading-copy"><i /><i /><i /><i /></div></article>)}</div> : visible.length ? <div className="marketplace-grid nextdeal-listing-grid">{visible.map(ad => <DealCard ad={ad} key={ad.id} />)}</div> : <div className="empty-state"><span className="nextdeal-empty-icon">{category?.icon || '🔎'}</span><h3>No matching ads yet</h3><p>Try another search or clear a filter. You can also post the first ad in this category.</p><button className="button button-outline" onClick={clearFilters}>Clear filters</button> <Link className="button button-dark" to={`/sell${category ? `?category=${category.slug}` : ''}`}>Post an ad</Link></div>}
         <p className="marketplace-disclaimer">Chat with sellers to ask questions and agree a safe local handover. For car ads, request a free test drive. No sale payment is collected in Plutonea.</p>
       </main>
       <aside className={`nextdeal-filter-sidebar ${filtersOpen ? 'nextdeal-filter-open' : ''}`} aria-label="Listing filters">
         <div className="nextdeal-filter-head"><div><span className="eyebrow">REFINE RESULTS</span><h3>Filters {activeCount > 0 && <b>{activeCount}</b>}</h3></div><button className="nextdeal-filter-close" onClick={() => setFiltersOpen(false)} aria-label="Close filters"><X /></button></div>
         <button className="nextdeal-clear-filter" onClick={clearFilters}>Clear all</button>
-        <section className="nextdeal-filter-section"><strong>Categories</strong><button className={!category ? 'active' : ''} onClick={() => setCategory()}>All categories</button>{nextDealCategories.map(item => <button key={item.slug} className={category?.slug === item.slug ? 'active' : ''} onClick={() => setCategory(item.slug)}><span>{item.icon} {item.label}</span><ArrowRight size={14} /></button>)}</section>
-        <section className="nextdeal-filter-section"><strong>Budget</strong><div className="nextdeal-price-fields"><label>Min ₹<input type="number" min="0" value={minPrice} onChange={event => setMinPrice(event.target.value)} placeholder="0" /></label><label>Max ₹<input type="number" min="0" value={maxPrice} onChange={event => setMaxPrice(event.target.value)} placeholder="Any" /></label></div></section>
-        {activeFields.map(field => <section className="nextdeal-filter-section" key={field.key}><FieldControl field={field} value={fieldFilters[field.key] || ''} onChange={value => setFieldFilters(current => ({ ...current, [field.key]: value }))} /></section>)}
+        {category?.slug === 'cars' ? <CarFilterPanel ads={ads} filters={fieldFilters} setFilter={(key, value) => setFieldFilters(current => ({ ...current, [key]: value }))} minPrice={minPrice} maxPrice={maxPrice} setPriceRange={(low, high) => { setMinPrice(low); setMaxPrice(high) }} /> : <>
+          <section className="nextdeal-filter-section"><strong>Budget</strong><div className="nextdeal-price-fields"><label>Min ₹<input type="number" min="0" value={minPrice} onChange={event => setMinPrice(event.target.value)} placeholder="0" /></label><label>Max ₹<input type="number" min="0" value={maxPrice} onChange={event => setMaxPrice(event.target.value)} placeholder="Any" /></label></div></section>
+          {!category && <section className="nextdeal-filter-section"><strong>Condition</strong><select className="nextdeal-general-condition" value={fieldFilters.condition || ''} onChange={event => setFieldFilters(current => ({ ...current, condition: event.target.value }))}><option value="">Any condition</option>{[...new Set(ads.map(ad => ad.attributes?.condition).filter((value): value is string => Boolean(value)))].sort().map(value => <option key={value}>{value}</option>)}</select></section>}
+          {activeFields.map(field => <section className="nextdeal-filter-section" key={field.key}><FieldControl field={field} value={fieldFilters[field.key] || ''} onChange={value => setFieldFilters(current => ({ ...current, [field.key]: value }))} /></section>)}
+          {!category && <p className="nextdeal-filter-category-hint">Choose a category from the header to see filters made for that kind of listing.</p>}
+        </>}
         <button className="button button-dark button-full nextdeal-filter-apply" onClick={() => setFiltersOpen(false)}>Show {visible.length} listings</button>
       </aside>
     </div>
@@ -359,7 +466,7 @@ export function PostMarketplaceAdPage() {
       <section className="nextdeal-form-section"><span className="nextdeal-step">1</span><div className="nextdeal-form-section-body"><h2>What are you listing?</h2><label>Category<select value={categorySlug} onChange={event => changeCategory(event.target.value)}>{nextDealCategories.map(item => <option key={item.slug} value={item.slug}>{item.icon} {item.label}</option>)}</select></label>
         <label>Subcategory<select value={subcategorySlug} onChange={event => setSubcategorySlug(event.target.value)}><option value="">Choose a subcategory</option>{category.subcategories.map(item => <option key={item.slug} value={item.slug}>{item.label}</option>)}</select></label>
         {car && <div className="nextdeal-form-fields">{[["Make", make, setMake], ["Model", model, setModel], ["Variant (optional)", variant, setVariant], ["Year", year, setYear], ["Kilometres", kilometres, setKilometres]].map(([label, value, setter]) => <label key={String(label)}>{String(label)}<input required={!String(label).includes('optional')} type={['Year', 'Kilometres'].includes(String(label)) ? 'number' : 'text'} min={String(label) === 'Year' ? '1950' : '0'} max={String(label) === 'Year' ? String(new Date().getFullYear() + 1) : undefined} value={String(value)} onChange={event => (setter as (value: string) => void)(event.target.value)} /></label>)}<label>Fuel<select required value={fuel} onChange={event => setFuel(event.target.value)}><option value="">Choose fuel</option>{['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'].map(value => <option key={value}>{value}</option>)}</select></label><label>Transmission<select required value={transmission} onChange={event => setTransmission(event.target.value)}><option value="">Choose transmission</option><option>Manual</option><option>Automatic</option></select></label></div>}
-        {formFields.length > 0 && <div className="nextdeal-form-fields">{formFields.map(field => <label key={field.key}>{field.label}{field.type === 'select' ? <select value={attributes[field.key] || ''} onChange={event => updateAttribute(field.key, event.target.value)}><option value="">Select {field.label.toLowerCase()}</option>{field.options?.map(option => <option key={option}>{option}</option>)}</select> : <input type={field.type === 'number' ? 'number' : 'text'} min={field.type === 'number' ? 0 : undefined} value={attributes[field.key] || ''} placeholder={field.placeholder} onChange={event => updateAttribute(field.key, event.target.value)} />}</label>)}</div>}
+        {formFields.length > 0 && <div className="nextdeal-form-fields">{formFields.map(field => field.key === 'features' ? <fieldset className="nextdeal-ad-feature-field" key={field.key}><legend>{field.label}</legend><div>{field.options?.map(option => { const chosen = (attributes.features || '').split(',').map(item => item.trim()).filter(Boolean); return <label key={option}><input type="checkbox" checked={chosen.includes(option)} onChange={() => updateAttribute('features', chosen.includes(option) ? chosen.filter(item => item !== option).join(', ') : [...chosen, option].join(', '))} /><span>{option}</span></label> })}</div></fieldset> : <label key={field.key}>{field.label}{field.type === 'select' ? <select value={attributes[field.key] || ''} onChange={event => updateAttribute(field.key, event.target.value)}><option value="">Select {field.label.toLowerCase()}</option>{field.options?.map(option => <option key={option}>{option}</option>)}</select> : <input type={field.type === 'number' ? 'number' : 'text'} min={field.type === 'number' ? 0 : undefined} value={attributes[field.key] || ''} placeholder={field.placeholder} onChange={event => updateAttribute(field.key, event.target.value)} />}</label>)}</div>}
       </div></section>
       <section className="nextdeal-form-section nextdeal-photo-links"><span className="nextdeal-step">2</span><div className="nextdeal-form-section-body"><h2>Add photos (optional)</h2><p className="muted">Add multiple photos for <strong>any category</strong>. Add a separate link for each image from Google Drive or another public image host.</p><PhotoLinksInput values={imageUrls} onChange={setImageUrls} idPrefix="new-ad-photo" /></div></section>
       <section className="nextdeal-form-section"><span className="nextdeal-step">3</span><div className="nextdeal-form-section-body"><h2>Describe your ad</h2><label>Ad title<input required maxLength={160} value={title} onChange={event => setTitle(event.target.value)} placeholder="Example: Whirlpool 1.5 ton split AC, good condition" /></label><label>Description<textarea required maxLength={4000} rows={5} value={description} onChange={event => setDescription(event.target.value)} placeholder="Mention condition, age, included accessories and anything a buyer should know." /></label><div className="nextdeal-form-fields"><label>Asking price (₹)<input required type="number" min="0" value={price} onChange={event => setPrice(event.target.value)} placeholder="Enter your price" /></label><label>Area / neighbourhood<input required maxLength={300} value={locationText} onChange={event => setLocationText(event.target.value)} placeholder="Example: Gomti Nagar, Lucknow" /></label></div></div></section>

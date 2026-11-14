@@ -617,3 +617,101 @@
 .nextdeal-card .marketplace-card-body>strong{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-height:1.35}
 .nextdeal-card .marketplace-price{margin-top:6px}
 @media(max-width:520px){.nextdeal-card-photo>.nextdeal-image-placeholder{font-size:3.2rem}.nextdeal-card-category-text{margin-bottom:5px;font-size:.65rem}}
+
+/* Category-aware classifieds filters: keep results on the left and filters on the right. */
+.nextdeal-results-layout{grid-template-columns:minmax(0,1fr) minmax(280px,320px);gap:24px}
+.nextdeal-filter-sidebar{top:100px;max-height:calc(100dvh - 118px);padding:18px}
+.nextdeal-filter-head{position:sticky;z-index:2;top:-18px;margin:-18px -18px 8px;padding:16px 18px 10px;background:var(--surface)}
+.nextdeal-filter-section{padding:14px 0;border-top:1px solid var(--line)}
+.nextdeal-filter-section>strong{display:block;margin-bottom:8px;color:var(--heading);font-size:.88rem}
+.nextdeal-filter-section>button{min-height:40px}
+.nextdeal-field{display:grid;gap:7px;color:var(--heading);font-size:.84rem;font-weight:700}
+.nextdeal-field input,.nextdeal-field select{width:100%;min-width:0;box-sizing:border-box}
+.nextdeal-field-range{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:0;padding:0;border:0}
+.nextdeal-field-range legend{grid-column:1/-1;margin-bottom:7px;padding:0;color:var(--heading);font-size:.84rem;font-weight:700}
+.nextdeal-field-range label{display:grid;gap:5px;color:var(--muted);font-size:.74rem;font-weight:650}
+.nextdeal-field-range input{width:100%;min-width:0;min-height:40px;box-sizing:border-box;padding:0 9px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit}
+.nextdeal-filter-apply{display:none}
+@media(max-width:1050px){.nextdeal-results-layout{grid-template-columns:minmax(0,1fr) 275px;gap:16px}}
+@media(max-width:760px){.nextdeal-results-layout{display:block}.nextdeal-filter-sidebar{top:auto;right:0;bottom:0;left:0;max-height:min(84dvh,780px);overflow:auto;padding:18px 18px calc(18px + env(safe-area-inset-bottom))}.nextdeal-filter-head{top:-18px;margin:-18px -18px 8px;padding:14px 18px 10px}.nextdeal-filter-apply{position:sticky;bottom:0;display:block;margin-top:12px}.nextdeal-field-range{grid-template-columns:1fr 1fr}}
+
+/* Cars browse filters follow the reference's grouped, discoverable controls. */
+.nextdeal-filter-group{border-top:1px solid var(--line)}
+.nextdeal-filter-group>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:51px;list-style:none;color:var(--heading);font-size:.9rem;font-weight:750;cursor:pointer}
+.nextdeal-filter-group>summary::-webkit-details-marker,.nextdeal-make-item>summary::-webkit-details-marker{display:none}
+.nextdeal-filter-group>summary svg,.nextdeal-make-item>summary>svg{flex:none;padding:4px;border-radius:50%;background:var(--surface-soft);transition:transform .16s}
+.nextdeal-filter-group[open]>summary svg,.nextdeal-make-item[open]>summary>svg{transform:rotate(180deg)}
+.nextdeal-filter-group-body{padding:0 0 15px}
+.nextdeal-dual-range{display:grid;gap:10px}
+.nextdeal-range-values{display:flex;justify-content:space-between;gap:10px;color:var(--accent-strong);font-size:.76rem}
+.nextdeal-range-sliders{position:relative;height:20px;display:grid;align-items:center}
+.nextdeal-range-sliders:before{content:"";position:absolute;left:4px;right:4px;height:3px;border-radius:99px;background:var(--accent-strong);opacity:.75}
+.nextdeal-range-sliders input{position:absolute;inset:0;width:100%;height:20px;margin:0;background:transparent;appearance:none;pointer-events:none}
+.nextdeal-range-sliders input::-webkit-slider-runnable-track{height:3px;background:transparent}
+.nextdeal-range-sliders input::-moz-range-track{height:3px;background:transparent}
+.nextdeal-range-sliders input::-webkit-slider-thumb{width:17px;height:17px;margin-top:-7px;border:2px solid var(--accent-strong);border-radius:50%;background:var(--surface);box-shadow:0 1px 5px rgba(0,0,0,.16);appearance:none;pointer-events:auto;cursor:grab}
+.nextdeal-range-sliders input::-moz-range-thumb{width:14px;height:14px;border:2px solid var(--accent-strong);border-radius:50%;background:var(--surface);box-shadow:0 1px 5px rgba(0,0,0,.16);pointer-events:auto;cursor:grab}
+.nextdeal-range-inputs{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.nextdeal-range-inputs label{display:grid;gap:5px;color:var(--muted);font-size:.7rem;font-weight:650}
+.nextdeal-range-inputs input{min-width:0;width:100%;height:39px;box-sizing:border-box;padding:0 9px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);font:inherit}
+.nextdeal-filter-search{display:flex;align-items:center;gap:8px;min-height:41px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--muted)}
+.nextdeal-filter-search input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:.78rem}
+.nextdeal-filter-hint{display:block;margin:12px 0 8px;color:var(--muted);font-size:.7rem;line-height:1.4}
+.nextdeal-model-chips{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 12px}
+.nextdeal-model-chips button{min-height:34px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);font-size:.73rem;cursor:pointer}
+.nextdeal-model-chips button.selected,.nextdeal-rating-options button.selected,.nextdeal-tile-options button.selected{border-color:var(--accent-strong);background:var(--accent-soft);color:var(--green)}
+.nextdeal-make-list{max-height:250px;overflow:auto;border:1px solid var(--line);border-radius:10px;scrollbar-width:thin}
+.nextdeal-make-item+ .nextdeal-make-item{border-top:1px solid var(--line)}
+.nextdeal-make-item>summary{display:flex;align-items:center;justify-content:space-between;gap:9px;min-height:41px;padding:0 9px;list-style:none;cursor:pointer}
+.nextdeal-make-item>summary label{display:flex;align-items:center;gap:9px;min-width:0;flex:1;font-size:.76rem;cursor:pointer}
+.nextdeal-make-item>summary label span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nextdeal-make-item>summary small,.nextdeal-filter-check small,.nextdeal-tile-options small{color:var(--muted);font-size:.68rem;font-weight:450}
+.nextdeal-make-item>summary input,.nextdeal-filter-check input{width:17px;height:17px;flex:none;accent-color:var(--accent-strong)}
+.nextdeal-make-item>summary>svg{width:23px;height:23px;padding:5px}
+.nextdeal-make-item>div{padding:0 8px 7px 25px}
+.nextdeal-filter-check{display:flex;align-items:center;gap:9px;min-height:39px;padding:5px 7px;border-radius:9px;color:var(--ink);font-size:.76rem;cursor:pointer}
+.nextdeal-filter-check:hover{background:var(--surface-soft)}
+.nextdeal-filter-check span{min-width:0;flex:1}
+.nextdeal-check-options{display:grid;gap:3px;max-height:240px;overflow:auto}
+.nextdeal-model-option{min-height:34px}
+.nextdeal-selected-model-hint{margin-top:8px;color:var(--muted);font-size:.68rem;line-height:1.4}
+.nextdeal-tile-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.nextdeal-tile-options button{position:relative;display:grid;justify-items:center;gap:6px;min-height:78px;padding:10px 6px 7px;border:1px solid transparent;border-radius:11px;background:var(--surface-soft);color:var(--ink);cursor:pointer}
+.nextdeal-tile-options button i{width:24px;height:24px;border:1px solid color-mix(in srgb,var(--ink) 20%,transparent);border-radius:50%;box-shadow:0 2px 5px rgba(0,0,0,.08)}
+.nextdeal-tile-options button strong{font-size:.72rem}
+.nextdeal-tile-options button small{position:absolute;right:6px;top:5px}
+.nextdeal-rating-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0 14px}
+.nextdeal-rating-options button{min-height:34px;padding:5px 6px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);font-size:.69rem;cursor:pointer}
+.nextdeal-rating-options button small{display:block;color:var(--muted);font-size:.62rem}
+.nextdeal-safety-filter>strong{display:block;margin:8px 0;color:var(--heading);font-size:.76rem}
+.nextdeal-filter-reset-inline{margin-top:7px;border:0;background:transparent;color:var(--green);font:inherit;font-size:.73rem;font-weight:700;cursor:pointer}
+.nextdeal-filter-category-hint{margin:10px 0;color:var(--muted);font-size:.77rem;line-height:1.5}
+.nextdeal-general-condition{width:100%;height:42px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit}
+.nextdeal-ad-feature-field{min-width:0;margin:0;padding:10px;border:1px solid var(--line);border-radius:11px}
+.nextdeal-ad-feature-field legend{padding:0 5px;color:var(--heading);font-size:.84rem;font-weight:700}
+.nextdeal-ad-feature-field>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.nextdeal-ad-feature-field label{display:flex!important;align-items:center;gap:7px;min-height:32px;font-size:.75rem!important;font-weight:550!important}
+.nextdeal-ad-feature-field input{width:16px!important;min-height:16px!important;accent-color:var(--accent-strong)}
+@media(max-width:760px){.nextdeal-filter-group>summary{min-height:48px}.nextdeal-make-list{max-height:220px}.nextdeal-filter-sidebar{z-index:91}.nextdeal-filter-scrim{z-index:90}}
+
+/* Listing loading: card-sized image placeholders plus a real request-bound progress indicator. */
+.nextdeal-load-progress{display:grid;gap:8px;margin:0 0 15px;padding:12px 14px;border:1px solid var(--line);border-radius:13px;background:var(--surface)}
+.nextdeal-load-progress-copy{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--muted);font-size:.78rem}
+.nextdeal-load-progress-copy strong{color:var(--green);font-variant-numeric:tabular-nums}
+.nextdeal-load-progress-track{height:6px;overflow:hidden;border-radius:99px;background:var(--surface-soft)}
+.nextdeal-load-progress-track>span{position:relative;display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent-strong),var(--green));transition:width .2s ease}
+.nextdeal-load-progress-track>span:after{position:absolute;inset:0;content:"";background:linear-gradient(90deg,transparent,rgba(255,255,255,.48),transparent);animation:nextdeal-progress-glint 1s linear infinite}
+.nextdeal-loading-grid{align-items:stretch}
+.nextdeal-loading-card{overflow:hidden;min-width:0;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:0 4px 16px rgba(var(--shadow-tint),.045)}
+.nextdeal-loading-photo{position:relative;display:grid;place-items:center;aspect-ratio:4/3;overflow:hidden;background:linear-gradient(110deg,var(--surface-soft) 15%,color-mix(in srgb,var(--surface) 72%,var(--accent-soft)) 35%,var(--surface-soft) 55%);background-size:220% 100%;animation:nextdeal-image-shimmer 1.4s ease-in-out infinite}
+.nextdeal-loading-photo:before{width:54px;height:54px;border:1px solid color-mix(in srgb,var(--green) 11%,transparent);border-radius:16px;background:color-mix(in srgb,var(--surface) 70%,transparent);content:"";box-shadow:0 6px 18px rgba(var(--shadow-tint),.04)}
+.nextdeal-loading-image-progress{position:absolute;right:16%;bottom:calc(50% - 3px);left:16%;height:4px;overflow:hidden;border-radius:99px;background:color-mix(in srgb,var(--green) 12%,transparent)}
+.nextdeal-loading-image-progress i{display:block;width:42%;height:100%;border-radius:inherit;background:var(--accent-strong);animation:nextdeal-image-progress 1.15s ease-in-out infinite}
+.nextdeal-loading-copy{display:grid;gap:10px;padding:14px}
+.nextdeal-loading-copy i{display:block;height:10px;border-radius:99px;background:linear-gradient(100deg,var(--surface-soft) 20%,color-mix(in srgb,var(--surface) 65%,var(--accent-soft)) 45%,var(--surface-soft) 70%);background-size:220% 100%;animation:nextdeal-image-shimmer 1.5s ease-in-out infinite}
+.nextdeal-loading-copy i:nth-child(1){width:39%;height:8px}.nextdeal-loading-copy i:nth-child(2){width:82%;height:13px}.nextdeal-loading-copy i:nth-child(3){width:47%;height:18px;margin-top:2px}.nextdeal-loading-copy i:nth-child(4){width:68%;height:8px;margin-top:3px}
+@keyframes nextdeal-image-shimmer{to{background-position-x:-220%}}
+@keyframes nextdeal-image-progress{0%{transform:translateX(-115%)}100%{transform:translateX(250%)}}
+@keyframes nextdeal-progress-glint{to{transform:translateX(100%)}}
+@media(max-width:520px){.nextdeal-load-progress{padding:10px 12px}.nextdeal-loading-card{border-radius:13px}.nextdeal-loading-copy{gap:8px;padding:10px}.nextdeal-loading-photo{aspect-ratio:1/0.88}}
+@media(prefers-reduced-motion:reduce){.nextdeal-loading-photo,.nextdeal-loading-copy i,.nextdeal-loading-image-progress i,.nextdeal-load-progress-track>span:after{animation:none}.nextdeal-load-progress-track>span{transition:none}}
