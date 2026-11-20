@@ -23,7 +23,7 @@ export type AdminCatalogCategory = Category & { cityId: string; cityName: string
 export type Sku = { id: string; name: string; price: number; strikePrice: number; discountPct: number; isInstant: boolean; inclusions: string }
 export type ServiceSummary = { id: string; name: string; slug: string; description: string; durationMins: number }
 export type AdminCatalogService = ServiceSummary & { categoryId: string; isActive: boolean }
-export type Service = ServiceSummary & { skus: Sku[] }
+export type Service = ServiceSummary & { skus: Sku[]; isPreview?: boolean }
 export type CartLine = { id: string; skuId: string; skuName: string; unitPrice: number; discountPct: number; quantity: number; lineTotal: number }
 export type Cart = { id: string; cityId: string; items: CartLine[]; subtotal: number; discount: number; total: number; itemCount: number }
 export type Address = { id: string; label: string; line1: string; line2?: string | null; pincode: string; lat: number; lng: number; isDefault: boolean }
@@ -181,7 +181,9 @@ export const endpoints = {
   createCatalogService: (value: { categoryId: string; name: string; slug: string; description: string; durationMins: number }) => api<string>('/api/v1/admin/services', { method: 'POST', body: value }),
   updateCatalogService: (id: string, value: { categoryId: string; name: string; slug: string; description: string; durationMins: number; isActive: boolean }) => api<void>(`/api/v1/admin/services/${id}`, { method: 'PUT', body: value }),
   deleteCatalogService: (id: string) => api<void>(`/api/v1/admin/services/${id}`, { method: 'DELETE' }),
-  service: (slug: string) => api<Service>(`/api/v1/services/${encodeURIComponent(slug)}`, { auth: false }),
+  // This endpoint remains public for visitors, but send an optional bearer token
+  // so the API can provide Admin-only catalog previews where no partner is live.
+  service: (slug: string) => api<Service>(`/api/v1/services/${encodeURIComponent(slug)}`),
   publicListings: (categoryId?: string) => api<PartnerListing[]>(`/api/v1/listings${categoryId ? `?categoryId=${categoryId}` : ''}`, { auth: false }),
   marketplaceAds: (cityId?: string, search?: string, kind?: 'Car' | 'Classified', categorySlug?: string, subcategorySlug?: string) => api<MarketplaceAd[]>(`/api/v1/marketplace/ads?${new URLSearchParams({ ...(cityId ? { cityId } : {}), ...(search ? { search } : {}), ...(kind ? { kind } : {}), ...(categorySlug ? { categorySlug } : {}), ...(subcategorySlug ? { subcategorySlug } : {}) })}`, { auth: false }),
   // Include the signed-in user's token so owners can preview their pending or
