@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BadgeCheck, CalendarDays, MapPin, MessageCircle, Plus, Search, Send, ShoppingBag, SlidersHorizontal, X } from 'lucide-react'
 import { endpoints, type MarketplaceAd, type MarketplaceAdInput, type MarketplaceConversation, type MarketplaceConversationThread, type MarketplaceRequest } from './api'
@@ -82,16 +82,18 @@ function AdminMarketplaceAdEditor({ad,onClose,onSaved}:{ad:MarketplaceAd;onClose
 export function MarketplaceChatsPage(){
  const [rows,setRows]=useState<MarketplaceConversation[]>([]),[error,setError]=useState('')
  const {user}=useAuth()
- const load=()=>endpoints.marketplaceConversations().then(setRows).catch(e=>setError((e as Error).message))
- useEffect(()=>{if(!user)return;void load();const t=window.setInterval(()=>void load(),5000);return()=>window.clearInterval(t)},[user])
+ const loading=useRef(false)
+ const load=()=>{if(loading.current)return;loading.current=true;void endpoints.marketplaceConversations().then(rows=>{setRows(rows);setError('')}).catch(e=>setError((e as Error).message)).finally(()=>{loading.current=false})}
+ useEffect(()=>{if(!user)return;load();const t=window.setInterval(load,30000);return()=>window.clearInterval(t)},[user])
  if(!user)return <div className="page-container auth-required"><h2>Sign in to see your chats</h2><p>Your buyer and seller conversations are saved to your account.</p><Link className="button button-dark" to="/login">Continue with Google</Link></div>
  return <div className="page-container"><Heading eyebrow="NEXT DEAL MESSAGES" title="Your chats" subtitle="Talk directly with buyers and sellers about their ads."/>{error&&<div className="error-banner" role="alert">{error}</div>}{rows.length?<section className="chat-list">{rows.map(c=><Link className="chat-list-item" to={`/chats/${c.id}`} key={c.id}><span className="chat-avatar">{c.otherUserName.slice(0,1).toUpperCase()}</span><span className="chat-list-copy"><strong>{c.otherUserName}</strong><small>{c.adTitle} · {c.lastMessage}</small></span><span className="chat-list-meta"><small>{new Date(c.lastMessageAt).toLocaleString()}</small>{c.unreadCount>0&&<b>{c.unreadCount}</b>}</span></Link>)}</section>:<div className="empty-state"><MessageCircle/><h3>No chats yet</h3><p>Open a Next Deal ad and choose “Chat with seller” to start.</p><Link className="button button-dark" to="/classifieds">Browse Next Deal</Link></div>}</div>
 }
 
 export function MarketplaceChatThreadPage(){
  const {id=''}=useParams(),{user}=useAuth(),[data,setData]=useState<MarketplaceConversationThread|null>(null),[body,setBody]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false)
- const load=()=>endpoints.marketplaceConversation(id).then(x=>setData(x)).catch(e=>setError((e as Error).message))
- useEffect(()=>{if(!user)return;void load();const t=window.setInterval(()=>void load(),2500);return()=>window.clearInterval(t)},[id,user])
+ const loading=useRef(false)
+ const load=()=>{if(loading.current)return;loading.current=true;void endpoints.marketplaceConversation(id).then(x=>{setData(x);setError('')}).catch(e=>setError((e as Error).message)).finally(()=>{loading.current=false})}
+ useEffect(()=>{if(!user)return;load();const t=window.setInterval(load,5000);return()=>window.clearInterval(t)},[id,user])
  useEffect(()=>{document.querySelector('.chat-thread')?.scrollTo({top:999999,behavior:'smooth'})},[data?.messages.length])
  const send=async(e:FormEvent)=>{e.preventDefault();if(!body.trim()||busy)return;setBusy(true);setError('');try{await endpoints.sendMarketplaceMessage(id,body);setBody('');await load()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  if(!user)return <div className="page-container auth-required"><h2>Sign in to open this chat</h2><Link className="button button-dark" to="/login">Continue with Google</Link></div>

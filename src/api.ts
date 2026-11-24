@@ -14,8 +14,11 @@ export type Session = {
 
 export type CurrentUser = {
   id: string; email: string; fullName: string; avatarUrl?: string | null
-  phone?: string | null; emailVerified?: boolean; gender?: string | null; currentLocation?: string | null; profileComplete?: boolean; role: Role; profileStatus: string; cityId?: string | null; locationPermissionStatus?: string | null; locationPermissionUpdatedAtUtc?: string | null; partnerApplicationStatus?: string | null; hasPartnerAccess?: boolean
+  phone?: string | null; emailVerified?: boolean; phoneVerified?: boolean; gender?: string | null; currentLocation?: string | null; profileComplete?: boolean; role: Role; profileStatus: string; cityId?: string | null; locationPermissionStatus?: string | null; locationPermissionUpdatedAtUtc?: string | null; partnerApplicationStatus?: string | null; hasPartnerAccess?: boolean
 }
+export type MobileVerificationStatus = { isVerified: boolean; mobileNumber: string; provider: 'Disabled' | 'WhatsApp'; verificationStatus?: string | null; codeExpiresAtUtc?: string | null }
+export type MobileVerificationStart = { isVerified: boolean; mobileNumber: string; verificationCode: string; whatsappLink: string; codeExpiresAtUtc: string }
+export type MobileVerificationSettings = { provider: 'Disabled' | 'WhatsApp'; businessWhatsAppNumber: string; webhookVerifyTokenConfigured: boolean; appSecretConfigured: boolean; codeExpiryMinutes: number }
 export type City = { id: string; name: string; slug: string; centerLat: number; centerLng: number }
 export type PlaceSearchResult = { displayName: string; lat: number; lng: number; city?: string | null; state?: string | null; postcode?: string | null }
 export type Category = { id: string; name: string; slug: string; iconUrl?: string | null; sortOrder: number }
@@ -198,6 +201,7 @@ export const endpoints = {
   setMarketplaceAdStatus: (id: string, status: string) => api<void>(`/api/v1/marketplace/ads/${id}/status`, { method: 'POST', body: { status } }),
   startMarketplaceConversation: (id: string, message: string) => api<MarketplaceConversation>(`/api/v1/marketplace/ads/${id}/conversations`, { method: 'POST', body: { message } }),
   marketplaceConversations: () => api<MarketplaceConversation[]>('/api/v1/marketplace/conversations'),
+  marketplaceUnreadCount: () => api<number>('/api/v1/marketplace/conversations/unread-count'),
   marketplaceConversation: (id: string) => api<MarketplaceConversationThread>(`/api/v1/marketplace/conversations/${id}`),
   sendMarketplaceMessage: (id: string, body: string) => api<MarketplaceMessage>(`/api/v1/marketplace/conversations/${id}/messages`, { method: 'POST', body: { body } }),
   bookTestDrive: (id: string, requestedAt: string, buyerNote?: string) => api<string>(`/api/v1/marketplace/cars/${id}/test-drives`, { method: 'POST', body: { requestedAt, buyerNote } }),
@@ -219,6 +223,10 @@ export const endpoints = {
   updateProfile: (profile: { fullName: string; cityId?: string | null; phone: string; gender: string; currentLocation: string }) => api<void>('/api/v1/profile', { method: 'PUT', body: profile }),
   updateLocationPreference: (permissionStatus: 'Granted' | 'Denied' | 'Dismissed' | 'Manual', cityId?: string | null, clearCity = false) => api<{ permissionStatus: string; cityId?: string | null; updatedAtUtc: string }>('/api/v1/profile/location-preference', { method: 'PUT', body: { permissionStatus, cityId: cityId || null, clearCity } }),
   profileCompletion: () => api<{emailVerified:boolean;profileComplete:boolean;hasAddress:boolean;profileStatus:string;phone?:string|null;gender?:string|null;currentLocation?:string|null;missingFields:string[]}>('/api/v1/profile/completion'),
+  startMobileVerification: (mobileNumber: string) => api<MobileVerificationStart>('/api/verification/initiate', { method: 'POST', body: { mobileNumber } }),
+  mobileVerificationStatus: () => api<MobileVerificationStatus>('/api/verification/status'),
+  adminMobileVerificationSettings: () => api<MobileVerificationSettings>('/api/v1/mobile-verification/admin/settings'),
+  saveAdminMobileVerificationSettings: (value: { provider: string }) => api<MobileVerificationSettings>('/api/v1/mobile-verification/admin/settings', { method: 'PUT', body: value }),
   myApplication: () => api<PartnerApplication | null>('/api/v1/pro/applications/me'),
   submitPartnerApplication: (categoryIds: string[], serviceId: string, serviceDescription?: string, applicantRemarks?: string) => api<string>('/api/v1/pro/applications', { method: 'POST', body: { categoryIds, skills: [{ serviceId, experienceYears: 1, serviceDescription }], documentUrls: [], applicantRemarks } }),
   updatePartnerApplication: (id: string, categoryIds: string[], serviceId: string, serviceDescription?: string, applicantRemarks?: string) => api<void>(`/api/v1/pro/applications/${id}`, { method: 'PUT', body: { categoryIds, skills: [{ serviceId, experienceYears: 1, serviceDescription }], applicantRemarks } }),
